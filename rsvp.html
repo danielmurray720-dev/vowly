@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RSVP</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --plum: #7A4257; --plum-ink: #5C2F41; --paper: #FBF8F5; --card: #FFFFFF; --ink: #2B2326; --muted: #6E6266;
+    --line: #E7DED8; --sage: #5F7A64; --error: #A33A3A;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #1C1719; --card: #262022; --ink: #F3ECEE; --muted: #B5A9AD; --line: #3A3134; --plum: #C98AA2; --plum-ink: #E5B7C8; --sage: #9CB8A0; --error: #F08A8A; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 var(--sans); -webkit-text-size-adjust: 100%; }
+  main { max-width: 560px; margin: 0 auto; padding: 48px 20px 64px; }
+  header { text-align: center; margin-bottom: 32px; }
+  .names { font: 400 clamp(36px, 9vw, 52px)/1.1 var(--serif); letter-spacing: -0.01em; margin: 0 0 14px; color: var(--plum-ink); }
+  .when { color: var(--muted); margin: 0; }
+  .rule { width: 56px; height: 1px; background: var(--plum); margin: 22px auto 0; opacity: .6; }
+  .note { font-family: var(--serif); font-style: italic; color: var(--muted); margin: 18px 0 0; }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 24px 20px; }
+  h2 { font: 500 24px/1.25 var(--serif); margin: 0 0 6px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+  label { display: block; font-weight: 600; font-size: 15px; margin: 18px 0 8px; }
+  label .opt { font-weight: 400; color: var(--muted); }
+  input, select, textarea {
+    width: 100%; font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--plum); outline-offset: 2px; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .choices.two { grid-template-columns: 1fr 1fr; }
+  .choice { position: relative; }
+  .choice input { position: absolute; opacity: 0; inset: 0; }
+  .choice span {
+    display: block; text-align: center; padding: 12px 6px; border: 1px solid var(--line); border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; background: var(--paper);
+  }
+  .choice input:checked + span { background: var(--plum); border-color: var(--plum); color: #fff; }
+  .choice input:focus-visible + span { outline: 2px solid var(--plum); outline-offset: 2px; }
+  button.primary {
+    width: 100%; margin-top: 26px; padding: 15px; border: 0; border-radius: 14px; background: var(--plum); color: #fff; font: 600 17px var(--sans); cursor: pointer;
+  }
+  @media (prefers-color-scheme: dark) { button.primary, .choice input:checked + span { color: #1C1719; } }
+  button.primary[disabled] { opacity: .55; cursor: default; }
+  button.link { background: none; border: 0; color: var(--plum); font: inherit; font-weight: 600; padding: 8px 0; cursor: pointer; }
+  .pick { display: grid; gap: 8px; }
+  .pick button { text-align: left; padding: 14px 16px; border: 1px solid var(--line); background: var(--paper); border-radius: 12px; font: inherit; color: inherit; cursor: pointer; }
+  .err { color: var(--error); font-size: 15px; margin: 14px 0 0; min-height: 1em; }
+  .done { text-align: center; padding: 12px 0; }
+  .done .mark { font: 400 56px/1 var(--serif); color: var(--sage); }
+  .hidden { display: none !important; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 28px; }
+  @media (prefers-reduced-motion: no-preference) { section.card { animation: rise .35s ease-out both; } @keyframes rise { from { opacity: 0; transform: translateY(6px); } } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 class="names" id="names">You’re invited</h1>
+    <p class="when" id="when"></p>
+    <div class="rule"></div>
+    <p class="note hidden" id="message"></p>
+  </header>
+
+  <section class="card" id="loading"><p class="sub" style="margin:0">Loading the invitation…</p></section>
+
+  <section class="card hidden" id="closed">
+    <h2>RSVPs are closed</h2>
+    <p class="sub" style="margin:0">Please contact the couple directly.</p>
+  </section>
+
+  <section class="card hidden" id="broken">
+    <h2>This link isn’t working</h2>
+    <p class="sub" style="margin:0" id="brokenText">Check the link you were sent, or ask the couple for a new one.</p>
+  </section>
+
+  <section class="card hidden" id="find">
+    <h2>Find your invitation</h2>
+    <p class="sub">Type your name as it appears on the invitation.</p>
+    <form id="findForm" novalidate>
+      <label for="findName">Your full name</label>
+      <input id="findName" autocomplete="name" required>
+      <p class="err" id="findErr" role="alert"></p>
+      <button class="primary" type="submit" id="findBtn">Find my invitation</button>
+    </form>
+    <div class="pick hidden" id="pick" style="margin-top:18px"></div>
+    <p class="hidden" id="notFound" style="margin:18px 0 0">
+      <span class="sub">Not finding your name? Check the spelling, or</span>
+      <button class="link" type="button" id="newGuestBtn">RSVP without an invitation match</button>
+    </p>
+  </section>
+
+  <section class="card hidden" id="form">
+    <h2 id="hello">Will you be there?</h2>
+    <p class="sub" id="party"></p>
+    <form id="rsvpForm" novalidate>
+      <div id="newName" class="hidden">
+        <label for="guestName">Your full name</label>
+        <input id="guestName" autocomplete="name">
+      </div>
+      <label id="comingLabel">Can you come?</label>
+      <div class="choices" role="radiogroup" aria-labelledby="comingLabel">
+        <label class="choice" style="margin:0"><input type="radio" name="rsvp" value="Attending"><span>Yes</span></label>
+        <label class="choice" style="margin:0"><input type="radio" name="rsvp" value="Declined"><span>No</span></label>
+        <label class="choice" style="margin:0"><input type="radio" name="rsvp" value="Maybe"><span>Not sure</span></label>
+      </div>
+      <div id="yesFields" class="hidden">
+        <div id="countWrap">
+          <label for="count">How many of you are coming?</label>
+          <select id="count"></select>
+        </div>
+        <div id="mealWrap" class="hidden">
+          <label for="meal">Meal choice</label>
+          <select id="meal"></select>
+        </div>
+        <label for="dietary">Allergies or dietary needs <span class="opt">(optional)</span></label>
+        <input id="dietary">
+        <div id="shuttleWrap" class="hidden">
+          <label id="shuttleLabel">Would you like a seat on the shuttle?</label>
+          <div class="choices" role="radiogroup" aria-labelledby="shuttleLabel">
+            <label class="choice" style="margin:0"><input type="radio" name="shuttle" value="Yes"><span>Yes</span></label>
+            <label class="choice" style="margin:0"><input type="radio" name="shuttle" value="No"><span>No</span></label>
+            <label class="choice" style="margin:0"><input type="radio" name="shuttle" value="Maybe"><span>Maybe</span></label>
+          </div>
+          <div id="pickupWrap" class="hidden">
+            <label for="pickup">Where should we pick you up? <span class="opt">(hotel or address)</span></label>
+            <input id="pickup">
+          </div>
+        </div>
+        <div id="songWrap" class="hidden">
+          <label for="song">A song that will get you dancing <span class="opt">(optional)</span></label>
+          <input id="song">
+        </div>
+      </div>
+      <label for="email">Email <span class="opt">(for updates, optional)</span></label>
+      <input id="email" type="email" autocomplete="email">
+      <label for="note">A note for the couple <span class="opt">(optional)</span></label>
+      <textarea id="note"></textarea>
+      <p class="err" id="sendErr" role="alert"></p>
+      <button class="primary" type="submit" id="sendBtn">Send RSVP</button>
+    </form>
+    <button class="link" type="button" id="notMe" style="margin-top:10px">Not you? Search again</button>
+  </section>
+
+  <section class="card hidden" id="thanks">
+    <div class="done">
+      <div class="mark" aria-hidden="true">✓</div>
+      <h2 id="thanksTitle">Thank you</h2>
+      <p class="sub" id="thanksText" style="margin:0">Your RSVP has been sent to the couple.</p>
+      <button class="link" type="button" id="changeBtn" style="margin-top:12px">Change my answer</button>
+    </div>
+  </section>
+
+  <footer>Sent with Vowly</footer>
+</main>
+
+<script>
+// Server details. These match src/config.js in the app; the anon key is public by design.
+const SUPABASE_URL = 'https://zocdcxajydxruezmshvo.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvY2RjeGFqeWR4cnVlem1zaHZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0NjE0ODksImV4cCI6MjExMTAzNzQ4OX0.MoFWYn0GN0s4-T4jltUkjNowyAEozKCKLALRwg90mtk';
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => ['loading', 'closed', 'broken', 'find', 'form', 'thanks'].forEach((s) => $(s).classList.toggle('hidden', s !== id));
+const params = new URLSearchParams(location.search);
+const code = (params.get('c') || location.hash.replace('#', '') || '').trim();
+let info = null, guest = null;
+
+async function rpc(fn, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data && data.message) || 'Something went wrong. Please try again.');
+  return data;
+}
+
+function prettyDate(d) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return d || '';
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(y, m - 1, day).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+async function start() {
+  if (!code) { show('broken'); return; }
+  try {
+    info = await rpc('rsvp_info', { p_code: code });
+  } catch (e) {
+    $('brokenText').textContent = e.message; show('broken'); return;
+  }
+  const names = info.names || info.weddingName || 'You’re invited';
+  $('names').textContent = names;
+  document.title = `RSVP · ${names}`;
+  $('when').textContent = [prettyDate(info.date), info.venue].filter(Boolean).join(' at ');
+  if (info.message) { $('message').textContent = info.message; $('message').classList.remove('hidden'); }
+  if (info.deadline && info.open) $('when').textContent += `${$('when').textContent ? '. ' : ''}Please reply by ${prettyDate(info.deadline)}.`;
+  if (!info.open) { show('closed'); return; }
+  const meals = Array.isArray(info.meals) ? info.meals.filter(Boolean) : [];
+  if (meals.length) {
+    $('meal').innerHTML = '<option value="">Choose…</option>' + meals.map((m) => `<option>${escapeHtml(m)}</option>`).join('');
+    $('mealWrap').classList.remove('hidden');
+  }
+  $('shuttleWrap').classList.toggle('hidden', !info.askShuttle);
+  $('songWrap').classList.toggle('hidden', !info.askSong);
+  show('find');
+  $('findName').focus();
+}
+
+function escapeHtml(t) { return String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+$('findForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('findName').value.trim();
+  $('findErr').textContent = ''; $('pick').classList.add('hidden'); $('notFound').classList.add('hidden');
+  if (name.length < 3) { $('findErr').textContent = 'Type your full name as it appears on the invitation.'; return; }
+  $('findBtn').disabled = true; $('findBtn').textContent = 'Searching…';
+  try {
+    const r = await rpc('rsvp_find', { p_code: code, p_name: name });
+    if (!r.found) {
+      $('findErr').textContent = 'We couldn’t find that name on the guest list.';
+      if (info.allowNew) $('notFound').classList.remove('hidden');
+    } else if (r.several) {
+      $('pick').innerHTML = '<p class="sub" style="margin:0 0 4px">A few invitations match. Which one is yours?</p>';
+      r.matches.forEach((m) => {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = m.name;
+        b.onclick = async () => { const one = await rpc('rsvp_find', { p_code: code, p_name: m.name }); openForm(one.guest || { id: m.id, name: m.name }); };
+        $('pick').appendChild(b);
+      });
+      $('pick').classList.remove('hidden');
+    } else openForm(r.guest);
+  } catch (err) { $('findErr').textContent = err.message; }
+  $('findBtn').disabled = false; $('findBtn').textContent = 'Find my invitation';
+});
+
+$('newGuestBtn').onclick = () => openForm(null);
+$('notMe').onclick = () => { show('find'); $('findName').select(); };
+$('changeBtn').onclick = () => openForm(guest);
+
+function openForm(g) {
+  guest = g;
+  $('newName').classList.toggle('hidden', !!g);
+  if (!g) $('guestName').value = $('findName').value.trim();
+  const first = g ? String(g.name || '').split(' ')[0] : '';
+  $('hello').textContent = first ? `Hi ${first}, will you be there?` : 'Will you be there?';
+  const size = g ? Math.max(Number(g.invitedSize || g.partySize) || 1, 1) : 6;
+  $('party').textContent = g ? (g.plusOne ? `Invitation for ${g.name} and ${g.plusOne}` : size > 1 ? `Your invitation is for ${size} people` : '') : 'Add your details and the couple will see your reply.';
+  $('count').innerHTML = Array.from({ length: size }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
+  $('count').value = String(Math.min(Number(g?.partySize) || size, size));
+  $('countWrap').classList.toggle('hidden', size < 2 && !!g);
+  document.querySelectorAll('input[name=rsvp]').forEach((r) => { r.checked = g?.rsvp && r.value === g.rsvp; });
+  document.querySelectorAll('input[name=shuttle]').forEach((r) => { r.checked = g?.needsShuttle && r.value === g.needsShuttle; });
+  $('meal').value = g?.meal || ''; $('dietary').value = g?.dietary || ''; $('song').value = g?.song || '';
+  $('pickup').value = g?.pickup || ''; $('email').value = g?.email || ''; $('note').value = '';
+  $('sendErr').textContent = '';
+  syncVisibility();
+  show('form');
+}
+
+function syncVisibility() {
+  const v = document.querySelector('input[name=rsvp]:checked')?.value;
+  $('yesFields').classList.toggle('hidden', !(v === 'Attending' || v === 'Maybe'));
+  const sh = document.querySelector('input[name=shuttle]:checked')?.value;
+  $('pickupWrap').classList.toggle('hidden', !(sh === 'Yes' || sh === 'Maybe'));
+}
+document.addEventListener('change', (e) => { if (e.target.name === 'rsvp' || e.target.name === 'shuttle') syncVisibility(); });
+
+$('rsvpForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const rsvp = document.querySelector('input[name=rsvp]:checked')?.value;
+  if (!rsvp) { $('sendErr').textContent = 'Choose whether you can come.'; return; }
+  const a = { rsvp, email: $('email').value.trim(), rsvpNote: $('note').value.trim() };
+  if (!guest) {
+    a.name = $('guestName').value.trim();
+    if (a.name.length < 3) { $('sendErr').textContent = 'Add your full name.'; $('guestName').focus(); return; }
+  }
+  if (rsvp !== 'Declined') {
+    a.partySize = Number($('count').value) || 1;
+    a.dietary = $('dietary').value.trim();
+    if (!$('mealWrap').classList.contains('hidden')) a.meal = $('meal').value;
+    if (info.askSong) a.song = $('song').value.trim();
+    if (info.askShuttle) {
+      const sh = document.querySelector('input[name=shuttle]:checked')?.value;
+      if (sh) { a.needsShuttle = sh; a.pickup = sh === 'No' ? '' : $('pickup').value.trim(); }
+    }
+  }
+  Object.keys(a).forEach((k) => { if (a[k] === '' && !guest) delete a[k]; });
+  $('sendBtn').disabled = true; $('sendBtn').textContent = 'Sending…'; $('sendErr').textContent = '';
+  try {
+    const r = await rpc('rsvp_submit', { p_code: code, p_guest: guest ? guest.id : null, p_answers: a });
+    if (guest) Object.assign(guest, a);
+    $('thanksTitle').textContent = rsvp === 'Attending' ? 'See you there' : rsvp === 'Declined' ? 'Thanks for letting us know' : 'Thank you';
+    $('thanksText').textContent = rsvp === 'Declined' ? 'You’ll be missed. Your reply has been sent to the couple.' : 'Your RSVP has been sent to the couple. You can come back to this link to change it.';
+    $('changeBtn').classList.toggle('hidden', !guest);
+    show('thanks');
+  } catch (err) { $('sendErr').textContent = err.message; }
+  $('sendBtn').disabled = false; $('sendBtn').textContent = 'Send RSVP';
+});
+
+start();
+</script>
+</body>
+</html>
